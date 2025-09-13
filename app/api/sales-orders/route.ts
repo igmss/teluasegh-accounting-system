@@ -102,7 +102,7 @@ function mapOrderStatus(status: string): string {
     case "shipped":
       return "shipped"
     case "processing":
-      return "pending"
+      return "processing"
     case "cancelled":
       return "cancelled"
     case "refunded":
