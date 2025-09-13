@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db, COLLECTIONS } from "@/lib/firebase"
 
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -118,14 +130,20 @@ export async function POST(request: NextRequest) {
         
         console.log(`✅ Created work order ${workOrderRef.id} for web order ${orderId}`)
         
-        return NextResponse.json({
-          success: true,
-          message: `Order ${orderId} processed successfully`,
-          orderId,
-          status,
-          workOrderId: workOrderRef.id,
-          timestamp: now.toISOString()
-        })
+    return NextResponse.json({
+      success: true,
+      message: `Order ${orderId} processed successfully`,
+      orderId,
+      status,
+      workOrderId: workOrderRef.id,
+      timestamp: now.toISOString()
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
       } else {
         console.log(`ℹ️ Work order already exists for order ${orderId}`)
       }
@@ -137,6 +155,12 @@ export async function POST(request: NextRequest) {
       orderId,
       status,
       timestamp: now.toISOString()
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
 
   } catch (error) {
