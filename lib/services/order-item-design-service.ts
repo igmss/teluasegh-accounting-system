@@ -1,5 +1,6 @@
 import { db, COLLECTIONS } from "../firebase";
 import { DesignService } from "./design-service";
+import { SizeCostService } from "./size-cost-service";
 
 export class OrderItemDesignService {
   /**
@@ -36,25 +37,32 @@ export class OrderItemDesignService {
           console.log(`Found design: ${design.name} for item: ${item.name}`);
           
           const quantity = item.quantity || 1;
-          const materialCost = design.materialCost * quantity;
-          const laborCost = design.laborCost * quantity;
-          const overheadCost = design.overheadCost * quantity;
-          const estimatedCost = materialCost + laborCost + overheadCost;
+          const size = item.size || 'M'; // Default size if not specified
+          
+          // Calculate size-specific costs
+          const sizeSpecificCosts = SizeCostService.calculateSizeSpecificCosts(
+            design, 
+            size, 
+            quantity
+          );
           
           itemCosts.push({
             item,
             designId: design.id,
             designName: design.name,
-            estimatedCost,
-            materialCost,
-            laborCost,
-            overheadCost,
-            quantity
+            estimatedCost: sizeSpecificCosts.totalCost,
+            materialCost: sizeSpecificCosts.materialCost,
+            laborCost: sizeSpecificCosts.laborCost,
+            overheadCost: sizeSpecificCosts.overheadCost,
+            quantity,
+            size: size,
+            manufacturingTime: sizeSpecificCosts.manufacturingTime,
+            complexity: sizeSpecificCosts.complexity
           });
           
-          totalEstimatedCost += estimatedCost;
+          totalEstimatedCost += sizeSpecificCosts.totalCost;
           
-          console.log(`Item ${item.name}: Estimated cost EGP ${estimatedCost} (Material: ${materialCost}, Labor: ${laborCost}, Overhead: ${overheadCost})`);
+          console.log(`Item ${item.name} (Size ${size}): Estimated cost EGP ${sizeSpecificCosts.totalCost} (Material: ${sizeSpecificCosts.materialCost}, Labor: ${sizeSpecificCosts.laborCost}, Overhead: ${sizeSpecificCosts.overheadCost})`);
         } else {
           console.warn(`No design found for item: ${item.name} (${item.productId})`);
           
@@ -93,6 +101,76 @@ export class OrderItemDesignService {
         success: false,
         totalEstimatedCost: 0,
         itemCosts: [],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Calculate costs for multiple items of the same design with different sizes
+   */
+  static async calculateMultiSizeDesignCosts(
+    designId: string,
+    sizeQuantities: Array<{ size: string; quantity: number }>
+  ): Promise<{
+    success: boolean;
+    totalEstimatedCost: number;
+    totalMaterialCost: number;
+    totalLaborCost: number;
+    totalOverheadCost: number;
+    totalManufacturingTime: number;
+    sizeBreakdown: Array<{
+      size: string;
+      quantity: number;
+      materialCost: number;
+      laborCost: number;
+      overheadCost: number;
+      totalCost: number;
+      manufacturingTime: number;
+    }>;
+    error?: string;
+  }> {
+    try {
+      console.log(`Calculating multi-size costs for design ${designId}...`);
+      
+      const design = await DesignService.getDesign(designId);
+      if (!design) {
+        return {
+          success: false,
+          totalEstimatedCost: 0,
+          totalMaterialCost: 0,
+          totalLaborCost: 0,
+          totalOverheadCost: 0,
+          totalManufacturingTime: 0,
+          sizeBreakdown: [],
+          error: "Design not found"
+        };
+      }
+
+      const result = SizeCostService.calculateMultiSizeOrderCosts(design, sizeQuantities);
+      
+      console.log(`Multi-size calculation complete. Total cost: EGP ${result.totalCost}`);
+      
+      return {
+        success: true,
+        totalEstimatedCost: result.totalCost,
+        totalMaterialCost: result.totalMaterialCost,
+        totalLaborCost: result.totalLaborCost,
+        totalOverheadCost: result.totalOverheadCost,
+        totalManufacturingTime: result.totalManufacturingTime,
+        sizeBreakdown: result.itemBreakdown
+      };
+
+    } catch (error) {
+      console.error("Error calculating multi-size design costs:", error);
+      return {
+        success: false,
+        totalEstimatedCost: 0,
+        totalMaterialCost: 0,
+        totalLaborCost: 0,
+        totalOverheadCost: 0,
+        totalManufacturingTime: 0,
+        sizeBreakdown: [],
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }

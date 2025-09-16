@@ -61,19 +61,13 @@ export class DesignService {
         };
       }) as Design[];
 
-      // Apply client-side filters for cost and margin ranges
+      // Apply client-side filters for cost ranges
       let filteredDesigns = designs;
       if (filter?.minCost !== undefined) {
         filteredDesigns = filteredDesigns.filter(d => d.totalCost >= filter.minCost!);
       }
       if (filter?.maxCost !== undefined) {
         filteredDesigns = filteredDesigns.filter(d => d.totalCost <= filter.maxCost!);
-      }
-      if (filter?.minMargin !== undefined) {
-        filteredDesigns = filteredDesigns.filter(d => d.margin >= filter.minMargin!);
-      }
-      if (filter?.maxMargin !== undefined) {
-        filteredDesigns = filteredDesigns.filter(d => d.margin <= filter.maxMargin!);
       }
 
       console.log("Returning", filteredDesigns.length, "filtered designs");
@@ -197,8 +191,7 @@ export class DesignService {
         inactiveDesigns: designs.filter(d => d.status === 'inactive').length,
         discontinuedDesigns: designs.filter(d => d.status === 'discontinued').length,
         averageCost: designs.reduce((sum, d) => sum + d.totalCost, 0) / designs.length || 0,
-        averageMargin: designs.reduce((sum, d) => sum + d.margin, 0) / designs.length || 0,
-        totalValue: designs.reduce((sum, d) => sum + (d.totalCost * 10), 0), // Assuming 10 units average
+        totalCostValue: designs.reduce((sum, d) => sum + (d.totalCost * 10), 0), // Assuming 10 units average
         categoryBreakdown: {}
       };
 
@@ -245,16 +238,11 @@ export class DesignService {
             image: product.image || "",
             images: product.images || [],
             
-                 // Default cost configuration (to be updated manually)
-                 materialCost: product.basePrice ? product.basePrice * 0.15 : 150,
-                 laborCost: product.basePrice ? product.basePrice * 0.1 : 100,
-                 overheadCost: product.basePrice ? product.basePrice * 0.05 : 50,
-                 totalCost: 0, // Will be calculated
-            
-            // Pricing
-            suggestedRetailPrice: product.basePrice || 600,
-            wholesalePrice: product.basePrice ? product.basePrice * 0.6 : 360,
-            margin: 0, // Will be calculated
+            // Default cost configuration (to be updated manually)
+            materialCost: product.basePrice ? product.basePrice * 0.15 : 150,
+            laborCost: product.basePrice ? product.basePrice * 0.1 : 100,
+            overheadCost: product.basePrice ? product.basePrice * 0.05 : 50,
+            totalCost: 0, // Will be calculated
             
             // Manufacturing details
             manufacturingTime: 2, // Default 2 hours
@@ -273,9 +261,8 @@ export class DesignService {
             variants: []
           };
 
-          // Calculate costs
+          // Calculate total cost
           designData.totalCost = this.calculateTotalCost(designData);
-          designData.margin = this.calculateMargin(designData);
 
           const designRef = db.collection(this.COLLECTION_NAME).doc();
           batch.set(designRef, {
@@ -312,17 +299,6 @@ export class DesignService {
     return materialCost + laborCost + overheadCost;
   }
 
-  /**
-   * Calculate profit margin for a design
-   */
-  private static calculateMargin(design: Partial<Design>): number {
-    const retailPrice = design.suggestedRetailPrice || 0;
-    const totalCost = design.totalCost || 0;
-    
-    if (retailPrice === 0) return 0;
-    
-    return ((retailPrice - totalCost) / retailPrice) * 100;
-  }
 
   /**
    * Get categories for filtering

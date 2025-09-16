@@ -14,11 +14,6 @@ export interface Design {
   overheadCost: number; // Overhead cost per unit in EGP
   totalCost: number; // Calculated total cost in EGP
   
-  // Pricing (in EGP)
-  suggestedRetailPrice: number;
-  wholesalePrice: number;
-  margin: number; // Profit margin percentage
-  
   // Manufacturing details
   manufacturingTime: number; // Hours required
   complexity: 'low' | 'medium' | 'high';
@@ -41,6 +36,16 @@ export interface Design {
   tags?: string[];
   notes?: string;
   variants?: DesignVariant[];
+  
+  // Size-specific cost configuration
+  sizeConfigurations?: SizeCostConfiguration[]; // Individual size configurations
+  sizeRanges?: SizeRange[]; // Range-based configurations (e.g., 2Y-6Y, 7Y-10Y, etc.)
+  defaultSizeMultipliers?: {
+    materialCostMultiplier: number;
+    laborCostMultiplier: number;
+    overheadCostMultiplier: number;
+    manufacturingTimeMultiplier: number;
+  };
 }
 
 export interface Material {
@@ -77,7 +82,25 @@ export interface DesignVariant {
   size?: string;
   material?: string;
   costAdjustment: number; // Additional cost for this variant in EGP
-  priceAdjustment: number; // Additional price for this variant in EGP
+}
+
+export interface SizeCostConfiguration {
+  size: string; // e.g., "2Y", "3Y", "4Y", etc.
+  materialCostMultiplier: number; // Multiplier for base material cost (e.g., 0.8 for smaller sizes, 1.2 for larger)
+  laborCostMultiplier: number; // Multiplier for base labor cost
+  overheadCostMultiplier: number; // Multiplier for base overhead cost
+  manufacturingTimeMultiplier: number; // Multiplier for manufacturing time
+  complexityAdjustment?: 'low' | 'medium' | 'high'; // Optional complexity adjustment for this size
+}
+
+export interface SizeRange {
+  start: string; // e.g., "2Y"
+  end: string; // e.g., "6Y"
+  materialCostMultiplier: number;
+  laborCostMultiplier: number;
+  overheadCostMultiplier: number;
+  manufacturingTimeMultiplier: number;
+  complexityAdjustment?: 'low' | 'medium' | 'high';
 }
 
 export interface DesignFilter {
@@ -87,8 +110,6 @@ export interface DesignFilter {
   complexity?: 'low' | 'medium' | 'high';
   minCost?: number;
   maxCost?: number;
-  minMargin?: number;
-  maxMargin?: number;
 }
 
 export interface DesignStats {
@@ -97,8 +118,7 @@ export interface DesignStats {
   inactiveDesigns: number;
   discontinuedDesigns: number;
   averageCost: number;
-  averageMargin: number;
-  totalValue: number;
+  totalCostValue: number;
   categoryBreakdown: {
     [category: string]: number;
   };

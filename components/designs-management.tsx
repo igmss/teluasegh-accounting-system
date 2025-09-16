@@ -265,26 +265,13 @@ export default function DesignsManagement() {
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Margin</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.averageMargin.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground">
-                Profit margin
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Cost Value</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">EGP {stats.totalValue.toFixed(0)}</div>
+              <div className="text-2xl font-bold">EGP {stats.totalCostValue.toFixed(0)}</div>
               <p className="text-xs text-muted-foreground">
-                Inventory value
+                Inventory cost value
               </p>
             </CardContent>
           </Card>
@@ -395,7 +382,6 @@ export default function DesignsManagement() {
                   <TableHead>Category</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cost</TableHead>
-                  <TableHead>Margin</TableHead>
                   <TableHead>Complexity</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -415,7 +401,6 @@ export default function DesignsManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>EGP {design.totalCost.toFixed(2)}</TableCell>
-                    <TableCell>{design.margin.toFixed(1)}%</TableCell>
                     <TableCell>
                       <Badge 
                         variant={
@@ -518,7 +503,6 @@ function DesignDialog({
         materialCost: 0,
         laborCost: 0,
         overheadCost: 0,
-        suggestedRetailPrice: 0,
         manufacturingTime: 0,
         complexity: "medium",
         status: "active",
@@ -631,15 +615,6 @@ function DesignDialog({
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="retailPrice">Retail Price</Label>
-              <Input
-                id="retailPrice"
-                type="number"
-                value={formData.suggestedRetailPrice || 0}
-                onChange={(e) => setFormData({ ...formData, suggestedRetailPrice: parseFloat(e.target.value) })}
-              />
-            </div>
             <div>
               <Label htmlFor="manufacturingTime">Manufacturing Time (hours)</Label>
               <Input
