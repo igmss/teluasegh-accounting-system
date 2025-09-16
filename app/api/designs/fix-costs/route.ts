@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
     console.log('🔧 Starting design cost fix...');
     
     // Get all designs
-    const designs = await DesignService.getDesigns();
+    const result = await DesignService.getDesigns();
+    const designs = result.designs;
     console.log(`📊 Found ${designs.length} designs to fix`);
     
     let fixed = 0;

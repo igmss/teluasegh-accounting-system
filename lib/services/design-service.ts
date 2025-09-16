@@ -117,7 +117,6 @@ export class DesignService {
       const designDoc = {
         ...designData,
         totalCost: this.calculateTotalCost(designData),
-        margin: this.calculateMargin(designData),
         createdAt: now,
         updatedAt: now
       };
@@ -144,15 +143,10 @@ export class DesignService {
         updatedAt: new Date()
       };
 
-           if (updates.materialCost !== undefined || 
-               updates.laborCost !== undefined || 
-               updates.overheadCost !== undefined) {
-             updateData.totalCost = this.calculateTotalCost(updates as Design);
-           }
-
-      if (updates.suggestedRetailPrice !== undefined || 
-          updates.totalCost !== undefined) {
-        updateData.margin = this.calculateMargin(updates as Design);
+      if (updates.materialCost !== undefined || 
+          updates.laborCost !== undefined || 
+          updates.overheadCost !== undefined) {
+        updateData.totalCost = this.calculateTotalCost(updates as Design);
       }
 
       await docRef.update(updateData);
