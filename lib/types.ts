@@ -44,17 +44,40 @@ export interface SalesOrder {
 export interface WorkOrder {
   id: string
   sales_order_id: string
+  design_id?: string // Reference to design configuration
+  design_name?: string // Cached design name for display
   bom_id?: string
   raw_materials_used: {
     item_id: string
     qty: number
     cost: number
   }[]
+  materials_issued?: {
+    inventoryItemId: string
+    inventoryItemName: string
+    quantityIssued: number
+    unitCost: number
+    totalCost: number
+  }[]
   labor_hours: number
+  labor_cost: number // Cost per hour * hours
   overhead_cost: number
+  total_cost: number // Calculated total cost
+  estimated_cost: number // Estimated cost from design
   status: "pending" | "in_progress" | "completed"
   created_at: Date
   completed_at?: Date
+  updated_at?: Date
+  completionPercentage?: number
+  assigned_worker?: string
+  start_time?: Date
+  estimated_completion?: Date
+  notes?: string
+  items?: any[] // Order items
+  customer_name?: string
+  customer_email?: string
+  total_amount?: number
+  order_source?: string
 }
 
 export interface InventoryItem {

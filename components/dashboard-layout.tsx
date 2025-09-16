@@ -17,6 +17,7 @@ import {
   Home,
   Users,
   Wrench,
+  Palette,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Customers", href: "/customers", icon: Users },
+  { name: "Designs", href: "/designs", icon: Palette },
   { name: "Sales Orders", href: "/sales-orders", icon: ShoppingCart },
   { name: "Work Orders", href: "/work-orders", icon: Wrench },
   { name: "Inventory", href: "/inventory", icon: Package },

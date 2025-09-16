@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db, COLLECTIONS } from "@/lib/firebase"
+import { OrderItemDesignService } from "@/lib/services/order-item-design-service"
 
 export async function GET() {
   try {
@@ -244,54 +245,56 @@ export async function PUT(request: Request) {
         }
         
         if (orderData) {
-          // Create work order
-          const workOrder = {
-            sales_order_id: orderId,
-            bom_id: null, // No BOM for manual orders yet
-            raw_materials_used: [], // Will be populated when materials are issued
-            labor_hours: 0,
-            overhead_cost: 0,
-            status: "pending",
-            created_at: new Date(),
-            completionPercentage: 0,
-            // Additional fields for tracking
-            assigned_worker: null,
-            start_time: new Date(),
-            estimated_completion: null,
-            notes: `Work order for ${orderSource} order ${orderId}`,
-            items: orderData.items || [],
-            // Customer information
-            customer_name: orderData.shippingAddress?.fullName || orderData.customer_name || "Unknown Customer",
-            customer_email: orderData.userId || orderData.customer_email || "unknown_user",
-            total_amount: orderData.total || orderData.total_amount || 0,
-            order_source: orderSource // Track if this is from web or manual order
-          }
-
-          // Create work order in Firestore
-          const workOrderRef = await db.collection("acc_work_orders").add(workOrder)
+          console.log(`Creating work order for ${orderSource} order ${orderId} with automatic cost calculation...`);
           
-          // Update accounting sales order status to "producing" (only for manual orders)
-          if (orderSource === "manual") {
-            await db.collection("acc_sales_orders").doc(orderId).update({
-              status: "producing",
-              updated_at: new Date()
-            })
-
-            // Create journal entry for work order start
-            const journalEntry = {
-              date: new Date(),
-              entries: [
-                { account_id: "INVENTORY_WIP", debit: orderData.total || 0, credit: 0, description: `Work order started for order ${orderId}` },
-                { account_id: "COGS_PENDING", debit: 0, credit: orderData.total || 0, description: `Work order started for order ${orderId}` }
-              ],
-              linked_doc: workOrderRef.id,
-              created_at: new Date()
+          // Create work order with automatic cost calculation from designs
+          const workOrderResult = await OrderItemDesignService.createWorkOrderWithAutoCosts(
+            orderId,
+            orderData.items || [],
+            {
+              customer_name: orderData.shippingAddress?.fullName || orderData.customer_name || "Unknown Customer",
+              customer_email: orderData.userId || orderData.customer_email || "unknown_user",
+              total_amount: orderData.total || orderData.total_amount || 0,
+              order_source: orderSource
             }
-            
-            await db.collection("acc_journal_entries").add(journalEntry)
-          }
+          );
           
-          console.log(`Created work order ${workOrderRef.id} for ${orderSource} order ${orderId}`)
+          if (workOrderResult.success) {
+            console.log(`✅ Created work order ${workOrderResult.workOrderId} with auto-calculated cost EGP ${workOrderResult.totalEstimatedCost}`);
+            
+            // Update accounting sales order status to "producing" (only for manual orders)
+            if (orderSource === "manual") {
+              await db.collection("acc_sales_orders").doc(orderId).update({
+                status: "producing",
+                updated_at: new Date()
+              });
+            }
+          } else {
+            console.error(`❌ Failed to create work order: ${workOrderResult.error}`);
+            
+            // Fallback: Create basic work order without auto costs
+            const basicWorkOrder = {
+              sales_order_id: orderId,
+              status: "pending",
+              created_at: new Date(),
+              updated_at: new Date(),
+              completionPercentage: 0,
+              notes: `Basic work order for ${orderSource} order ${orderId} (auto-cost calculation failed)`,
+              items: orderData.items || [],
+              customer_name: orderData.shippingAddress?.fullName || orderData.customer_name || "Unknown Customer",
+              customer_email: orderData.userId || orderData.customer_email || "unknown_user",
+              total_amount: orderData.total || orderData.total_amount || 0,
+              order_source: orderSource,
+              estimated_cost: 0,
+              total_cost: 0,
+              labor_cost: 0,
+              overhead_cost: 0,
+              materials_issued: []
+            };
+            
+            const workOrderRef = await db.collection("acc_work_orders").add(basicWorkOrder);
+            console.log(`Created basic work order ${workOrderRef.id} as fallback`);
+          }
         }
       } catch (workOrderError) {
         console.error("Error creating work order:", workOrderError)

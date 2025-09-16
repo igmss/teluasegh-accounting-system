@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db, COLLECTIONS } from "@/lib/firebase"
+import { OrderItemDesignService } from "@/lib/services/order-item-design-service"
 
 // Handle CORS preflight requests
 export async function OPTIONS(request: NextRequest) {
@@ -88,62 +89,82 @@ export async function POST(request: NextRequest) {
         .get()
 
       if (existingWorkOrderSnapshot.empty) {
-        // Create work order
-        const workOrder = {
-          sales_order_id: orderId,
-          status: "pending",
-          completionPercentage: 0,
-          raw_materials_used: [],
-          overhead_cost: 0,
-          labor_cost: 0,
-          total_cost: 0,
-          created_at: now,
-          updated_at: now,
-          estimated_completion: null,
-          completed_at: null
-        }
+        console.log(`Creating work order for web order ${orderId} with automatic cost calculation...`);
+        
+        // Get order items for cost calculation
+        const orderDoc = await db.collection("orders").doc(orderId).get();
+        const orderItems = orderDoc.exists ? (orderDoc.data()?.items || []) : [];
+        
+        // Calculate costs from designs FIRST
+        console.log(`🔄 Calculating costs for ${orderItems.length} order items...`);
+        const costCalculation = await OrderItemDesignService.calculateOrderCostsFromDesigns(orderItems);
+        
+        if (costCalculation.success) {
+          console.log(`✅ Cost calculation successful: EGP ${costCalculation.totalEstimatedCost}`);
+          
+          // Create work order with calculated costs
+          const workOrder = {
+            sales_order_id: orderId,
+            status: "pending",
+            completionPercentage: 0,
+            raw_materials_used: [],
+            materials_issued: [],
+            overhead_cost: costCalculation.itemCosts.reduce((sum, item) => sum + item.overheadCost, 0),
+            labor_cost: costCalculation.itemCosts.reduce((sum, item) => sum + item.laborCost, 0),
+            total_cost: 0,
+            estimated_cost: costCalculation.totalEstimatedCost,
+            created_at: now,
+            updated_at: now,
+            estimated_completion: null,
+            completed_at: null,
+            notes: `Work order created with automatic cost calculation (EGP ${costCalculation.totalEstimatedCost})`,
+            items: orderItems,
+            item_costs: costCalculation.itemCosts,
+            order_source: "web"
+          };
 
-        const workOrderRef = await db.collection(COLLECTIONS.WORK_ORDERS).add(workOrder)
-        
-        // Create journal entry for work order start
-        const journalEntry = {
-          date: now,
-          entries: [
-            { 
-              account_id: "INVENTORY_WIP", 
-              debit: orderData?.total || 0, 
-              credit: 0, 
-              description: `Work order started for web order ${orderId}` 
-            },
-            { 
-              account_id: "COGS_PENDING", 
-              debit: 0, 
-              credit: orderData?.total || 0, 
-              description: `Work order started for web order ${orderId}` 
-            }
-          ],
-          linked_doc: workOrderRef.id,
-          created_at: now
+          const workOrderRef = await db.collection(COLLECTIONS.WORK_ORDERS).add(workOrder);
+          console.log(`✅ Created work order ${workOrderRef.id} with automatic cost calculation EGP ${costCalculation.totalEstimatedCost}`);
+        } else {
+          console.error(`❌ Cost calculation failed: ${costCalculation.error}`);
+          
+          // Fallback: Create basic work order with warning
+          const basicWorkOrder = {
+            sales_order_id: orderId,
+            status: "pending",
+            completionPercentage: 0,
+            raw_materials_used: [],
+            materials_issued: [],
+            overhead_cost: 0,
+            labor_cost: 0,
+            total_cost: 0,
+            estimated_cost: 0,
+            created_at: now,
+            updated_at: now,
+            estimated_completion: null,
+            completed_at: null,
+            notes: `Basic work order for web order ${orderId} (cost calculation failed: ${costCalculation.error})`,
+            items: orderItems,
+            order_source: "web"
+          };
+
+          const workOrderRef = await db.collection(COLLECTIONS.WORK_ORDERS).add(basicWorkOrder);
+          console.log(`⚠️ Created basic work order ${workOrderRef.id} without costs - manual update required`);
         }
         
-        await db.collection(COLLECTIONS.JOURNAL_ENTRIES).add(journalEntry)
-        
-        console.log(`✅ Created work order ${workOrderRef.id} for web order ${orderId}`)
-        
-    return NextResponse.json({
-      success: true,
-      message: `Order ${orderId} processed successfully`,
-      orderId,
-      status,
-      workOrderId: workOrderRef.id,
-      timestamp: now.toISOString()
-    }, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-    })
+        return NextResponse.json({
+          success: true,
+          message: `Order ${orderId} processed successfully`,
+          orderId,
+          status,
+          timestamp: now.toISOString()
+        }, {
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }
+        })
       } else {
         console.log(`ℹ️ Work order already exists for order ${orderId}`)
       }

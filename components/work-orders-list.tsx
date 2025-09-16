@@ -28,8 +28,10 @@ export function WorkOrdersList() {
         if (!response.ok) {
           throw new Error('Failed to fetch work orders')
         }
-        const workOrdersData = await response.json()
-        setWorkOrders(workOrdersData)
+        const responseData = await response.json()
+        // Handle the API response structure: { success: true, data: workOrders, count: number }
+        const workOrdersData = responseData.success ? responseData.data : []
+        setWorkOrders(Array.isArray(workOrdersData) ? workOrdersData : [])
       } catch (error) {
         console.error("Error loading work orders:", error)
         setWorkOrders([])
@@ -70,8 +72,9 @@ export function WorkOrdersList() {
         // Refresh work orders
         const workOrdersResponse = await fetch('/api/work-orders')
         if (workOrdersResponse.ok) {
-          const workOrdersData = await workOrdersResponse.json()
-          setWorkOrders(workOrdersData)
+          const responseData = await workOrdersResponse.json()
+          const workOrdersData = responseData.success ? responseData.data : []
+          setWorkOrders(Array.isArray(workOrdersData) ? workOrdersData : [])
         }
         setIsUpdateDialogOpen(false)
         alert('Materials and labor updated successfully!')
@@ -161,7 +164,7 @@ export function WorkOrdersList() {
 
       if (response.ok) {
         // Get the work order to find the sales order ID
-        const workOrder = workOrders.find(wo => wo.id === workOrderId)
+        const workOrder = (Array.isArray(workOrders) ? workOrders : []).find(wo => wo.id === workOrderId)
         if (workOrder && workOrder.sales_order_id) {
           // Trigger complete order workflow
           const completeResponse = await fetch('/api/workflow/complete-order', {
@@ -201,8 +204,9 @@ export function WorkOrdersList() {
         // Refresh work orders to get updated data
         const workOrdersResponse = await fetch('/api/work-orders')
         if (workOrdersResponse.ok) {
-          const workOrdersData = await workOrdersResponse.json()
-          setWorkOrders(workOrdersData)
+          const responseData = await workOrdersResponse.json()
+          const workOrdersData = responseData.success ? responseData.data : []
+          setWorkOrders(Array.isArray(workOrdersData) ? workOrdersData : [])
         }
       } else {
         console.error('Failed to update work order status')
@@ -224,19 +228,19 @@ export function WorkOrdersList() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{workOrders.filter((wo) => wo.status === "pending").length}</div>
+            <div className="text-2xl font-bold">{(Array.isArray(workOrders) ? workOrders : []).filter((wo) => wo.status === "pending").length}</div>
             <div className="text-sm text-muted-foreground">Pending Work Orders</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{workOrders.filter((wo) => wo.status === "in_progress").length}</div>
+            <div className="text-2xl font-bold">{(Array.isArray(workOrders) ? workOrders : []).filter((wo) => wo.status === "in_progress").length}</div>
             <div className="text-sm text-muted-foreground">In Progress</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{workOrders.filter((wo) => wo.status === "completed").length}</div>
+            <div className="text-2xl font-bold">{(Array.isArray(workOrders) ? workOrders : []).filter((wo) => wo.status === "completed").length}</div>
             <div className="text-sm text-muted-foreground">Completed Today</div>
           </CardContent>
         </Card>
@@ -262,7 +266,7 @@ export function WorkOrdersList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {workOrders.map((workOrder) => (
+              {(Array.isArray(workOrders) ? workOrders : []).map((workOrder) => (
                 <TableRow key={workOrder.id}>
                   <TableCell className="font-medium">{workOrder.id}</TableCell>
                   <TableCell>{workOrder.sales_order_id}</TableCell>
@@ -275,8 +279,27 @@ export function WorkOrdersList() {
                       <Progress value={workOrder.completionPercentage || workOrder.completion_percentage || 0} className="w-20" />
                     </div>
                   </TableCell>
-                  <TableCell>{formatCurrency(totalMaterialCost(workOrder.raw_materials_used || []))}</TableCell>
-                  <TableCell>{workOrder.labor_hours || 0}h</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      {workOrder.raw_materials_used && workOrder.raw_materials_used.length > 0 
+                        ? (
+                          <>
+                            <span>{formatCurrency(totalMaterialCost(workOrder.raw_materials_used))}</span>
+                            <span className="text-xs text-green-600">Actual</span>
+                          </>
+                        )
+                        : (
+                          <>
+                            <span>{formatCurrency(workOrder.estimated_cost || 0)}</span>
+                            <span className="text-xs text-blue-600">Estimated</span>
+                          </>
+                        )
+                      }
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {workOrder.labor_hours || (workOrder.labor_cost ? Math.round(workOrder.labor_cost / 50) : 0)}h
+                  </TableCell>
                   <TableCell>{getStatusBadge(workOrder.status)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">

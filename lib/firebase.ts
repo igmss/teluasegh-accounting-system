@@ -39,7 +39,9 @@ export const COLLECTIONS = {
   INVENTORY_MOVEMENTS: "acc_inventory_movements",
   INVOICES: "acc_invoices",
   PAYMENTS: "acc_payments",
+  DESIGNS: "acc_designs",
   // Source collections (existing website data)
   ORDERS: "orders",
   RETURNS: "returns",
+  PRODUCTS: "products", // Main website products collection
 } as const
