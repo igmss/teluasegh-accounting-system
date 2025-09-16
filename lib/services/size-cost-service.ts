@@ -67,10 +67,11 @@ export class SizeCostService {
     
     // Calculate costs with size multipliers
     const materialCost = (design.materialCost * multipliers.materialCostMultiplier) * quantity;
-    const laborCost = (design.laborCost * multipliers.laborCostMultiplier) * quantity;
+    const laborCostPerHour = design.laborCost * multipliers.laborCostMultiplier;
+    const manufacturingTime = design.manufacturingTime * multipliers.manufacturingTimeMultiplier;
+    const laborCost = (laborCostPerHour * manufacturingTime) * quantity;
     const overheadCost = (design.overheadCost * multipliers.overheadCostMultiplier) * quantity;
     const totalCost = materialCost + laborCost + overheadCost;
-    const manufacturingTime = design.manufacturingTime * multipliers.manufacturingTimeMultiplier;
     
     return {
       materialCost,

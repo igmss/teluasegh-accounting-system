@@ -287,10 +287,14 @@ export class DesignService {
    */
   private static calculateTotalCost(design: Partial<Design>): number {
     const materialCost = design.materialCost || 0;
-    const laborCost = design.laborCost || 0;
+    const laborCostPerHour = design.laborCost || 0;
+    const manufacturingTime = design.manufacturingTime || 0;
     const overheadCost = design.overheadCost || 0;
     
-    return materialCost + laborCost + overheadCost;
+    // Labor cost = cost per hour × manufacturing time
+    const totalLaborCost = laborCostPerHour * manufacturingTime;
+    
+    return materialCost + totalLaborCost + overheadCost;
   }
 
 

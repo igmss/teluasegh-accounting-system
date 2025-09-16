@@ -16,7 +16,11 @@ export async function POST(request: NextRequest) {
     for (const design of designs) {
       try {
         // Calculate correct total cost
-        const correctTotalCost = design.materialCost + design.laborCost + design.overheadCost;
+        // Labor cost = cost per hour × manufacturing time
+        const laborCostPerHour = design.laborCost || 0;
+        const manufacturingTime = design.manufacturingTime || 0;
+        const totalLaborCost = laborCostPerHour * manufacturingTime;
+        const correctTotalCost = (design.materialCost || 0) + totalLaborCost + (design.overheadCost || 0);
         
         // Only update if totalCost is incorrect
         if (design.totalCost !== correctTotalCost) {
