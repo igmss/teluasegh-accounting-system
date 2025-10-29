@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Play, CheckCircle, Clock, Wrench } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { WorkOrderDetails } from "./work-order-details"
 
 export function WorkOrdersList() {
   const [workOrders, setWorkOrders] = useState<any[]>([])
@@ -258,6 +259,7 @@ export function WorkOrdersList() {
                 <TableHead>Work Order ID</TableHead>
                 <TableHead>Sales Order</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>Order Value</TableHead>
                 <TableHead>Progress</TableHead>
                 <TableHead>Material Cost</TableHead>
                 <TableHead>Labor Hours</TableHead>
@@ -270,7 +272,15 @@ export function WorkOrdersList() {
                 <TableRow key={workOrder.id}>
                   <TableCell className="font-medium">{workOrder.id}</TableCell>
                   <TableCell>{workOrder.sales_order_id}</TableCell>
-                  <TableCell>{workOrder.customer_name || "Unknown Customer"}</TableCell>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{workOrder.customer_name || "Unknown Customer"}</div>
+                      {workOrder.customer_email && (
+                        <div className="text-sm text-muted-foreground">{workOrder.customer_email}</div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{formatCurrency(workOrder.total_amount || 0)}</TableCell>
                   <TableCell>
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">

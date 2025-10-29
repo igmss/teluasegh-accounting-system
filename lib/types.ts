@@ -73,11 +73,13 @@ export interface WorkOrder {
   start_time?: Date
   estimated_completion?: Date
   notes?: string
-  items?: any[] // Order items
-  customer_name?: string
+  items?: any[] // Order items from sales order
+  customer_name?: string // Fetched from customer collection
   customer_email?: string
-  total_amount?: number
-  order_source?: string
+  customer_phone?: string
+  customer_address?: string
+  total_amount?: number // Total order value from sales order
+  order_status?: string // Status from sales order
 }
 
 export interface InventoryItem {

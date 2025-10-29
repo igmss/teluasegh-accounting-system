@@ -108,7 +108,7 @@ export class WorkOrderService {
   }
 
   /**
-   * Get work order with design information
+   * Get work order with design, customer, and sales order information
    */
   static async getWorkOrderWithDesign(workOrderId: string): Promise<{
     workOrder: WorkOrder | null;
@@ -122,7 +122,51 @@ export class WorkOrderService {
         return { workOrder: null, design: null, materialRequirements: [] };
       }
 
-      const workOrder = { id: workOrderDoc.id, ...workOrderDoc.data() } as WorkOrder;
+      const workOrder = { 
+        id: workOrderDoc.id, 
+        ...workOrderDoc.data(),
+        created_at: workOrderDoc.data()?.created_at?.toDate ? workOrderDoc.data().created_at.toDate() : (workOrderDoc.data()?.created_at || new Date()),
+        updated_at: workOrderDoc.data()?.updated_at?.toDate ? workOrderDoc.data().updated_at.toDate() : (workOrderDoc.data()?.updated_at || new Date()),
+        completed_at: workOrderDoc.data()?.completed_at?.toDate ? workOrderDoc.data().completed_at.toDate() : (workOrderDoc.data()?.completed_at || null),
+        start_time: workOrderDoc.data()?.start_time?.toDate ? workOrderDoc.data().start_time.toDate() : (workOrderDoc.data()?.start_time || null),
+        estimated_completion: workOrderDoc.data()?.estimated_completion?.toDate ? workOrderDoc.data().estimated_completion.toDate() : (workOrderDoc.data()?.estimated_completion || null)
+      } as WorkOrder;
+
+      // Fetch sales order details
+      if (workOrder.sales_order_id) {
+        try {
+          const salesOrderDoc = await db.collection(COLLECTIONS.SALES_ORDERS).doc(workOrder.sales_order_id).get();
+          if (salesOrderDoc.exists) {
+            const salesOrderData = salesOrderDoc.data();
+            
+            // Fetch customer details
+            if (salesOrderData.customer_id) {
+              const customerDoc = await db.collection(COLLECTIONS.CUSTOMERS).doc(salesOrderData.customer_id).get();
+              if (customerDoc.exists) {
+                const customerData = customerDoc.data();
+                workOrder.customer_name = customerData.name || "Unknown Customer";
+                workOrder.customer_email = customerData.email || "";
+                workOrder.customer_phone = customerData.phone || "";
+                workOrder.customer_address = customerData.address || "";
+              }
+            }
+
+            // Add sales order items and total amount
+            workOrder.items = salesOrderData.items || [];
+            workOrder.total_amount = salesOrderData.items?.reduce((sum: number, item: any) => sum + (item.qty * item.unit_price), 0) || 0;
+            workOrder.order_status = salesOrderData.status || "unknown";
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch sales order ${workOrder.sales_order_id}:`, error);
+          workOrder.customer_name = "Unknown Customer";
+          workOrder.items = [];
+          workOrder.total_amount = 0;
+        }
+      } else {
+        workOrder.customer_name = "Unknown Customer";
+        workOrder.items = [];
+        workOrder.total_amount = 0;
+      }
 
       // Get design information if available
       let design = null;
@@ -144,7 +188,7 @@ export class WorkOrderService {
   }
 
   /**
-   * Get all work orders with design information
+   * Get all work orders with design, customer, and sales order information
    */
   static async getAllWorkOrdersWithDesigns(): Promise<WorkOrder[]> {
     try {
@@ -152,15 +196,55 @@ export class WorkOrderService {
         .orderBy("created_at", "desc")
         .get();
 
-      const workOrders = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        created_at: doc.data().created_at?.toDate ? doc.data().created_at.toDate() : (doc.data().created_at || new Date()),
-        updated_at: doc.data().updated_at?.toDate ? doc.data().updated_at.toDate() : (doc.data().updated_at || new Date()),
-        completed_at: doc.data().completed_at?.toDate ? doc.data().completed_at.toDate() : (doc.data().completed_at || null),
-        start_time: doc.data().start_time?.toDate ? doc.data().start_time.toDate() : (doc.data().start_time || null),
-        estimated_completion: doc.data().estimated_completion?.toDate ? doc.data().estimated_completion.toDate() : (doc.data().estimated_completion || null)
-      })) as WorkOrder[];
+      const workOrders = await Promise.all(snapshot.docs.map(async (doc) => {
+        const workOrderData = {
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate ? doc.data().created_at.toDate() : (doc.data().created_at || new Date()),
+          updated_at: doc.data().updated_at?.toDate ? doc.data().updated_at.toDate() : (doc.data().updated_at || new Date()),
+          completed_at: doc.data().completed_at?.toDate ? doc.data().completed_at.toDate() : (doc.data().completed_at || null),
+          start_time: doc.data().start_time?.toDate ? doc.data().start_time.toDate() : (doc.data().start_time || null),
+          estimated_completion: doc.data().estimated_completion?.toDate ? doc.data().estimated_completion.toDate() : (doc.data().estimated_completion || null)
+        } as WorkOrder;
+
+        // Fetch sales order details
+        if (workOrderData.sales_order_id) {
+          try {
+            const salesOrderDoc = await db.collection(COLLECTIONS.SALES_ORDERS).doc(workOrderData.sales_order_id).get();
+            if (salesOrderDoc.exists) {
+              const salesOrderData = salesOrderDoc.data();
+              
+              // Fetch customer details
+              if (salesOrderData.customer_id) {
+                const customerDoc = await db.collection(COLLECTIONS.CUSTOMERS).doc(salesOrderData.customer_id).get();
+                if (customerDoc.exists) {
+                  const customerData = customerDoc.data();
+                  workOrderData.customer_name = customerData.name || "Unknown Customer";
+                  workOrderData.customer_email = customerData.email || "";
+                  workOrderData.customer_phone = customerData.phone || "";
+                  workOrderData.customer_address = customerData.address || "";
+                }
+              }
+
+              // Add sales order items and total amount
+              workOrderData.items = salesOrderData.items || [];
+              workOrderData.total_amount = salesOrderData.items?.reduce((sum: number, item: any) => sum + (item.qty * item.unit_price), 0) || 0;
+              workOrderData.order_status = salesOrderData.status || "unknown";
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch sales order ${workOrderData.sales_order_id}:`, error);
+            workOrderData.customer_name = "Unknown Customer";
+            workOrderData.items = [];
+            workOrderData.total_amount = 0;
+          }
+        } else {
+          workOrderData.customer_name = "Unknown Customer";
+          workOrderData.items = [];
+          workOrderData.total_amount = 0;
+        }
+
+        return workOrderData;
+      }));
 
       return workOrders;
     } catch (error) {
