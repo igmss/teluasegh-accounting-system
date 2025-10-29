@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { AccountingService } from "@/lib/accounting-service"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Verify cron secret for security

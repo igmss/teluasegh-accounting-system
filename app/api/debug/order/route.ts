@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, COLLECTIONS } from "@/lib/firebase";
 import { OrderItemDesignService } from "@/lib/services/order-item-design-service";
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

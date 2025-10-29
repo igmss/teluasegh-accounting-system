@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, COLLECTIONS } from "@/lib/firebase";
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/inventory/items - Get all inventory items for material selection
 export async function GET(request: NextRequest) {
   try {

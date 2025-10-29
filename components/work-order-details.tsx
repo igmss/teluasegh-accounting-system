@@ -51,6 +51,26 @@ export function WorkOrderDetails({ workOrder }: WorkOrderDetailsProps) {
               <span className="text-muted-foreground">Work Order Status:</span>
               <Badge variant={workOrder.status === "completed" ? "default" : "secondary"}>{workOrder.status}</Badge>
             </div>
+            {workOrder.order_source && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Order Source:</span>
+                <Badge variant="outline">{workOrder.order_source}</Badge>
+              </div>
+            )}
+            {workOrder.created_at && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Created:</span>
+                <span className="font-medium text-sm">
+                  {new Date(workOrder.created_at).toLocaleDateString()} {new Date(workOrder.created_at).toLocaleTimeString()}
+                </span>
+              </div>
+            )}
+            {workOrder.notes && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Notes:</span>
+                <span className="font-medium text-sm">{workOrder.notes}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -93,21 +113,89 @@ export function WorkOrderDetails({ workOrder }: WorkOrderDetailsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {workOrder.items.map((item: any, index: number) => (
-                <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
-                  <div>
-                    <div className="font-medium">{item.sku || item.name || "Unknown Product"}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Quantity: {item.qty} × {formatCurrency(item.unit_price)}
+              {workOrder.items.map((item: any, index: number) => {
+                // Handle different item formats (original order vs accounting sales order)
+                const productName = item.name || item.productName || item.sku || "Unknown Product";
+                const quantity = item.quantity || item.qty || 0;
+                const unitPrice = item.basePrice || item.adjustedPrice || item.unit_price || 0;
+                const totalPrice = quantity * unitPrice;
+                
+                return (
+                  <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      {item.image && (
+                        <img 
+                          src={item.image} 
+                          alt={productName} 
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      )}
+                      <div>
+                        <div className="font-medium">{productName}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {item.category && <span className="mr-2">Category: {item.category}</span>}
+                          {item.color && <span className="mr-2">Color: {item.color}</span>}
+                          {item.size && <span className="mr-2">Size: {item.size}</span>}
+                          {item.sku && item.sku !== productName && <span className="mr-2">SKU: {item.sku}</span>}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Quantity: {quantity} × {formatCurrency(unitPrice)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(totalPrice)}</div>
                     </div>
                   </div>
-                  <div className="font-medium">{formatCurrency(item.qty * item.unit_price)}</div>
-                </div>
-              ))}
+                );
+              })}
               <div className="border-t pt-3 flex justify-between font-bold text-lg">
                 <span>Order Total:</span>
                 <span>{formatCurrency(totalOrderValue)}</span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Design Information */}
+      {workOrder.item_costs && workOrder.item_costs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Design & Cost Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {workOrder.item_costs.map((itemCost: any, index: number) => (
+                <div key={index} className="p-3 border rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="font-medium">{itemCost.designName || "Unknown Design"}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Size: {itemCost.size} | Quantity: {itemCost.quantity} | Complexity: {itemCost.complexity}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(itemCost.estimatedCost)}</div>
+                      <div className="text-xs text-muted-foreground">Total Cost</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="text-center">
+                      <div className="font-medium">{formatCurrency(itemCost.materialCost)}</div>
+                      <div className="text-xs text-muted-foreground">Materials</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">{formatCurrency(itemCost.laborCost)}</div>
+                      <div className="text-xs text-muted-foreground">Labor</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">{formatCurrency(itemCost.overheadCost)}</div>
+                      <div className="text-xs text-muted-foreground">Overhead</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

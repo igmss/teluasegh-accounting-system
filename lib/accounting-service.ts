@@ -382,19 +382,28 @@ export class AccountingService {
 
       const totalRevenue = invoicesSnapshot.docs.reduce((sum, doc) => {
         const invoice = doc.data() as Invoice
-        return sum + invoice.total
+        return sum + (invoice.amount || 0)
       }, 0)
 
       const totalCogs = journalEntriesSnapshot.docs.reduce((sum, doc) => {
         const entry = doc.data() as JournalEntry
+        if (!entry || !entry.entries || !Array.isArray(entry.entries)) {
+          return sum
+        }
         return sum + entry.entries.reduce((entrySum, acc) => {
-          return acc.account.includes("Cost of Goods Sold") ? entrySum + acc.debit : entrySum
+          if (!acc || !acc.account_id) {
+            return entrySum
+          }
+          // Check if account_id is COGS (Cost of Goods Sold)
+          return acc.account_id === "COGS" ? entrySum + (acc.debit || 0) : entrySum
         }, 0)
       }, 0)
 
       const wipValue = workOrdersSnapshot.docs.reduce((sum, doc) => {
         const workOrder = doc.data() as WorkOrder
-        return sum + workOrder.materialCost + workOrder.laborCost
+        const materialCost = workOrder.raw_materials_used?.reduce((matSum, mat) => matSum + (mat.qty * mat.cost), 0) || 0
+        const laborCost = workOrder.labor_cost || 0
+        return sum + materialCost + laborCost
       }, 0)
 
       return {

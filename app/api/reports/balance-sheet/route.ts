@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   try {
     console.log("Balance sheet API called")

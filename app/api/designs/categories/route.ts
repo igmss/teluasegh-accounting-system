@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DesignService } from "@/lib/services/design-service";
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/designs/categories - Get all categories
 export async function GET(request: NextRequest) {
   try {
