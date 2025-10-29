@@ -228,8 +228,8 @@ export function DashboardOverview() {
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-2 mt-4">
-              {data.orderStatus.map((status) => (
-                <div key={status.name} className="flex items-center gap-2">
+              {data.orderStatus.map((status, index) => (
+                <div key={status?.name || `status-${index}`} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color }} />
                   <span className="text-sm">
                     {status.name}: {status.value}
@@ -253,8 +253,8 @@ export function DashboardOverview() {
           <CardContent>
             <div className="space-y-4">
               {data.recentOrders.length > 0 ? (
-                data.recentOrders.map((order) => (
-                  <div key={order.id} className="flex items-center justify-between">
+                data.recentOrders.map((order, index) => (
+                  <div key={order?.id || `order-${index}`} className="flex items-center justify-between">
                     <div>
                       <div className="font-medium">{order.id}</div>
                       <div className="text-sm text-muted-foreground">{order.customer}</div>
@@ -294,8 +294,8 @@ export function DashboardOverview() {
           <CardContent>
             <div className="space-y-4">
               {data.workOrders.length > 0 ? (
-                data.workOrders.map((wo) => (
-                  <div key={wo.id} className="space-y-2">
+                data.workOrders.map((wo, index) => (
+                  <div key={wo?.id || `workorder-${index}`} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium">{wo.id}</div>

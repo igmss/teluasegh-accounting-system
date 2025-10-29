@@ -1,5 +1,6 @@
 import { db, COLLECTIONS } from "../firebase";
 import { DesignService } from "./design-service";
+import { OrderItemDesignService } from "./order-item-design-service";
 import type { WorkOrder } from "../types";
 
 export class WorkOrderService {
@@ -236,14 +237,47 @@ export class WorkOrderService {
         workOrder.order_status = "unknown";
       }
 
-      // Get design information if available
+      // Get design information if available and recalculate costs from latest design data
       let design = null;
       let materialRequirements = [];
       
-      if (workOrder.design_id) {
+      // Recalculate item_costs from latest design data if items exist
+      if (workOrder.items && workOrder.items.length > 0) {
+        try {
+          // Recalculate costs from current design data
+          const costCalculation = await OrderItemDesignService.calculateOrderCostsFromDesigns(workOrder.items);
+          
+          if (costCalculation.success && costCalculation.itemCosts.length > 0) {
+            // Update item_costs with recalculated values based on latest design data
+            workOrder.item_costs = costCalculation.itemCosts;
+            
+            // Also update aggregate costs
+            workOrder.estimated_cost = costCalculation.totalEstimatedCost;
+            workOrder.labor_cost = costCalculation.itemCosts.reduce((sum, item) => sum + item.laborCost, 0);
+            workOrder.overhead_cost = costCalculation.itemCosts.reduce((sum, item) => sum + item.overheadCost, 0);
+            
+            console.log(`Recalculated costs for work order ${workOrderId}: Total EGP ${costCalculation.totalEstimatedCost}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to recalculate costs for work order ${workOrderId}:`, error);
+          // Continue with existing costs if recalculation fails
+        }
+      }
+      
+      // Get design information for display (if item_costs reference a design)
+      if (workOrder.item_costs && workOrder.item_costs.length > 0 && workOrder.item_costs[0].designId) {
+        const firstDesignId = workOrder.item_costs[0].designId;
+        design = await DesignService.getDesign(firstDesignId);
+        if (design && workOrder.items && workOrder.items.length > 0) {
+          const firstItem = workOrder.items[0];
+          const quantity = firstItem.quantity || 1;
+          materialRequirements = await DesignService.getMaterialRequirements(firstDesignId, quantity);
+        }
+      } else if (workOrder.design_id) {
+        // Fallback to work order's design_id
         design = await DesignService.getDesign(workOrder.design_id);
         if (design) {
-          const quantity = 1; // Default quantity, could be calculated from work order
+          const quantity = 1; // Default quantity
           materialRequirements = await DesignService.getMaterialRequirements(workOrder.design_id, quantity);
         }
       }

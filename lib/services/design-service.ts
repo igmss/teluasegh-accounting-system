@@ -114,11 +114,41 @@ export class DesignService {
   static async createDesign(designData: Omit<Design, "id" | "createdAt" | "updatedAt">): Promise<string> {
     try {
       const now = new Date();
+      // Duplicate prevention: check by productId if present, else by normalized name+category
+      if ((designData as any).productId) {
+        const dupByProduct = await db.collection(this.COLLECTION_NAME)
+          .where("productId", "==", (designData as any).productId)
+          .limit(1)
+          .get();
+        if (!dupByProduct.empty) {
+          const id = dupByProduct.docs[0].id;
+          console.log("Design already exists by productId, returning existing ID:", id);
+          return id;
+        }
+      } else {
+        const nameLower = (designData.name || "").trim().toLowerCase();
+        const categoryLower = (designData.category || "").trim().toLowerCase();
+        if (nameLower) {
+          const dupByName = await db.collection(this.COLLECTION_NAME)
+            .where("name_lower", "==", nameLower)
+            .where("category_lower", "==", categoryLower)
+            .limit(1)
+            .get();
+          if (!dupByName.empty) {
+            const id = dupByName.docs[0].id;
+            console.log("Design already exists by name+category, returning existing ID:", id);
+            return id;
+          }
+        }
+      }
       const designDoc = {
         ...designData,
         totalCost: this.calculateTotalCost(designData),
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        // store normalized fields to enable fast duplicate lookups
+        name_lower: (designData.name || "").trim().toLowerCase(),
+        category_lower: (designData.category || "").trim().toLowerCase()
       };
 
       const docRef = await db.collection(this.COLLECTION_NAME).add(designDoc);
@@ -204,7 +234,7 @@ export class DesignService {
   /**
    * Import designs from main website products collection
    */
-  static async importFromProducts(): Promise<{ imported: number; errors: string[] }> {
+  static async importFromProducts(): Promise<{ imported: number; updated: number; skipped: number; errors: string[] }> {
     try {
       console.log("Starting import of designs from products collection...");
       
@@ -213,12 +243,43 @@ export class DesignService {
       const products = productsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      } as any));
 
       console.log(`Found ${products.length} products to import`);
 
+      // Pre-fetch ALL existing designs once for fast duplicate checking
+      console.log("Fetching existing designs for duplicate check...");
+      const existingDesignsSnapshot = await db.collection(this.COLLECTION_NAME).get();
+      const existingDesigns = existingDesignsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ref: doc.ref,
+        ...doc.data()
+      } as any));
+
+      console.log(`Found ${existingDesigns.length} existing designs`);
+
+      // Build lookup maps for fast duplicate detection
+      const byProductId = new Map<string, any>();
+      const byNameCategory = new Map<string, any>();
+      
+      existingDesigns.forEach((design: any) => {
+        // Map by productId (most reliable)
+        if ((design as any).productId) {
+          byProductId.set((design as any).productId, design);
+        }
+        
+        // Map by normalized name+category (handle both normalized fields and original fields)
+        const nameLower = (design.name_lower || (design.name || "").trim().toLowerCase());
+        const categoryLower = (design.category_lower || (design.category || "").trim().toLowerCase());
+        const key = `${nameLower}|||${categoryLower}`;
+        if (!byNameCategory.has(key)) {
+          byNameCategory.set(key, design);
+        }
+      });
+
       const batch = db.batch();
       let imported = 0;
+      let updated = 0;
       const errors: string[] = [];
 
       for (const product of products) {
@@ -254,18 +315,55 @@ export class DesignService {
             notes: `Imported from product: ${product.id}`,
             variants: []
           };
+          // include productId for exact mapping
+          (designData as any).productId = product.id;
 
           // Calculate total cost
           designData.totalCost = this.calculateTotalCost(designData);
-
-          const designRef = db.collection(this.COLLECTION_NAME).doc();
-          batch.set(designRef, {
+          const payload = {
             ...designData,
+            name_lower: (designData.name || "").trim().toLowerCase(),
+            category_lower: (designData.category || "").trim().toLowerCase(),
             createdAt: new Date(),
             updatedAt: new Date()
-          });
+          };
 
-          imported++;
+          // Fast duplicate check using pre-built maps (no database queries in loop!)
+          let existingDesign = byProductId.get(product.id);
+          let duplicateReason = "";
+          
+          if (!existingDesign) {
+            const key = `${payload.name_lower}|||${payload.category_lower}`;
+            existingDesign = byNameCategory.get(key);
+            if (existingDesign) {
+              duplicateReason = `duplicate name+category: "${designData.name}" in "${designData.category}"`;
+            }
+          } else {
+            duplicateReason = `duplicate productId: "${product.id}"`;
+          }
+
+          if (existingDesign) {
+            // This is either an existing design from DB or a duplicate within the same import batch
+            if (existingDesign.ref) {
+              // Update existing design (merge to preserve manual cost edits)
+              batch.set(existingDesign.ref, payload, { merge: true });
+              updated++;
+              if (duplicateReason && !duplicateReason.includes("productId")) {
+                // Only log if it's not a productId duplicate (those are expected from database)
+                console.log(`  ⚠️  Product "${product.name}" (${product.id}): ${duplicateReason} - updating existing design`);
+              }
+            }
+          } else {
+            // Create new design
+            const designRef = db.collection(this.COLLECTION_NAME).doc();
+            batch.set(designRef, payload);
+            imported++;
+            
+            // Add to lookup maps for future checks in this batch (to prevent duplicates within same import)
+            byProductId.set(product.id, { id: designRef.id, ref: designRef, ...payload } as any);
+            const key = `${payload.name_lower}|||${payload.category_lower}`;
+            byNameCategory.set(key, { id: designRef.id, ref: designRef, ...payload } as any);
+          }
         } catch (error) {
           console.error(`Error importing product ${product.id}:`, error);
           errors.push(`Product ${product.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -273,9 +371,17 @@ export class DesignService {
       }
 
       await batch.commit();
-      console.log(`Successfully imported ${imported} designs`);
+      const skipped = products.length - imported - updated - errors.length;
+      console.log(`Successfully imported ${imported} new designs, updated ${updated} existing designs`);
+      if (skipped > 0) {
+        console.log(`⚠️  ${skipped} products skipped (likely duplicates in source or missing data)`);
+      }
+      if (errors.length > 0) {
+        console.log(`❌ ${errors.length} errors encountered`);
+      }
+      console.log(`📊 Summary: ${imported + updated} total designs processed out of ${products.length} products`);
 
-      return { imported, errors };
+      return { imported, updated, skipped, errors };
     } catch (error) {
       console.error("Error importing designs:", error);
       throw new Error("Failed to import designs from products");

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const { orderId } = await request.json()
@@ -12,28 +14,75 @@ export async function POST(request: Request) {
       )
     }
 
-    // Get the order details
-    const orderDoc = await db.collection("manual_orders").doc(orderId).get()
-    const orderData = orderDoc.data()
+    // Try to get the order from multiple possible collections
+    let orderData = null
+    let orderSource = null
     
-    if (!orderData) {
+    // Try manual_orders first
+    const manualOrderDoc = await db.collection("manual_orders").doc(orderId).get()
+    if (manualOrderDoc.exists) {
+      orderData = manualOrderDoc.data()
+      orderSource = "manual_orders"
+    } else {
+      // Try orders collection (web orders)
+      const webOrderDoc = await db.collection("orders").doc(orderId).get()
+      if (webOrderDoc.exists) {
+        orderData = webOrderDoc.data()
+        orderSource = "orders"
+      } else {
+        // Try acc_sales_orders (accounting system)
+        const salesOrderDoc = await db.collection("acc_sales_orders").doc(orderId).get()
+        if (salesOrderDoc.exists) {
+          orderData = salesOrderDoc.data()
+          orderSource = "acc_sales_orders"
+        }
+      }
+    }
+    
+    if (!orderData || !orderSource) {
       return NextResponse.json(
         { error: "Order not found" },
         { status: 404 }
       )
     }
 
-    // 1. Update order status to completed
-    await db.collection("manual_orders").doc(orderId).update({
-      status: "completed",
-      updatedAt: new Date()
-    })
+    // 1. Update order status to completed in the source collection
+    if (orderSource === "manual_orders") {
+      await db.collection("manual_orders").doc(orderId).update({
+        status: "completed",
+        updatedAt: new Date()
+      })
+    } else if (orderSource === "orders") {
+      await db.collection("orders").doc(orderId).update({
+        status: "completed",
+        updatedAt: new Date()
+      })
+    }
 
-    // 2. Update accounting sales order status
-    await db.collection("acc_sales_orders").doc(orderId).update({
-      status: "completed",
-      updated_at: new Date()
-    })
+    // 2. Update accounting sales order status (create if doesn't exist)
+    const salesOrderRef = db.collection("acc_sales_orders").doc(orderId)
+    const salesOrderDoc = await salesOrderRef.get()
+    
+    if (salesOrderDoc.exists) {
+      await salesOrderRef.update({
+        status: "completed",
+        updated_at: new Date()
+      })
+    } else {
+      // Create sales order if it doesn't exist in accounting system
+      await salesOrderRef.set({
+        id: orderId,
+        website_order_id: orderId,
+        customer_id: orderData.userId || orderData.customer_id || "unknown",
+        customer_name: orderData.shippingAddress?.fullName || orderData.customer_name || "Unknown Customer",
+        items: orderData.items || [],
+        status: "completed",
+        total_amount: orderData.total || orderData.total_amount || 0,
+        order_source: orderSource === "orders" ? "web" : "manual",
+        created_at: orderData.createdAt?.toDate?.() || new Date(),
+        updated_at: new Date()
+      })
+    }
 
     // 3. Complete work order (if not already completed)
     const workOrdersSnapshot = await db.collection("acc_work_orders")
@@ -82,14 +131,20 @@ export async function POST(request: Request) {
     const existingInvoice = await db.collection("acc_invoices").doc(invoiceId).get()
     
     if (!existingInvoice.exists) {
+      // Extract customer info based on order source
+      const customerId = orderData.userId || orderData.customer_id || "unknown"
+      const customerName = orderData.shippingAddress?.fullName || orderData.customer_name || "Unknown Customer"
+      const totalAmount = orderData.total || orderData.total_amount || 0
+      
       const invoice = {
         id: invoiceId,
         sales_order_id: orderId,
-        customer_id: orderData.userId || "manual_user",
-        customer_name: orderData.shippingAddress?.fullName || "Manual Customer",
-        amount: orderData.total || 0,
+        customer_id: customerId,
+        customer_name: customerName,
+        amount: totalAmount,
+        total: totalAmount, // Also include 'total' field for consistency
         tax_amount: 0, // You can add tax calculation here
-        total_amount: orderData.total || 0,
+        total_amount: totalAmount,
         due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         status: "unpaid",
         created_at: new Date(),

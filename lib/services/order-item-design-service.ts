@@ -39,6 +39,17 @@ export class OrderItemDesignService {
           const quantity = item.quantity || 1;
           const size = item.size || 'M'; // Default size if not specified
           
+          // Get actual material requirements and calculate real material cost from current inventory prices
+          let actualMaterialCost = 0;
+          try {
+            const materialRequirements = await DesignService.getMaterialRequirements(design.id, quantity);
+            actualMaterialCost = materialRequirements.reduce((sum, req) => sum + req.totalCost, 0);
+            console.log(`Actual material cost from requirements for ${design.name}: EGP ${actualMaterialCost}`);
+          } catch (error) {
+            console.warn(`Failed to get material requirements for design ${design.id}, using stored materialCost:`, error);
+            // Fallback to size-specific calculation below
+          }
+          
           // Calculate size-specific costs
           const sizeSpecificCosts = SizeCostService.calculateSizeSpecificCosts(
             design, 
@@ -46,12 +57,35 @@ export class OrderItemDesignService {
             quantity
           );
           
+          // Use actual material cost from requirements if available, otherwise use size-specific calculation
+          let finalMaterialCost = sizeSpecificCosts.materialCost;
+          let finalEstimatedCost = sizeSpecificCosts.totalCost;
+          
+          if (actualMaterialCost > 0) {
+            // Recalculate with actual material cost from current inventory
+            // actualMaterialCost is already calculated for the quantity, so we need to:
+            // 1. Get the base material cost per unit from actual requirements
+            const actualMaterialCostPerUnit = actualMaterialCost / quantity;
+            // 2. Apply size multiplier to get size-specific material cost
+            // The size multiplier is embedded in sizeSpecificCosts, so we calculate it:
+            const baseMaterialCostPerUnit = design.materialCost || 0;
+            const sizeMultiplier = baseMaterialCostPerUnit > 0 
+              ? sizeSpecificCosts.materialCost / (baseMaterialCostPerUnit * quantity)
+              : 1.0;
+            
+            // Apply size multiplier to actual material cost
+            finalMaterialCost = actualMaterialCost * sizeMultiplier;
+            // Recalculate total with actual material cost
+            finalEstimatedCost = finalMaterialCost + sizeSpecificCosts.laborCost + sizeSpecificCosts.overheadCost;
+            console.log(`Using actual material cost EGP ${finalMaterialCost} (from requirements EGP ${actualMaterialCost}, size multiplier: ${sizeMultiplier.toFixed(3)}) instead of EGP ${sizeSpecificCosts.materialCost}`);
+          }
+          
           itemCosts.push({
             item,
             designId: design.id,
             designName: design.name,
-            estimatedCost: sizeSpecificCosts.totalCost,
-            materialCost: sizeSpecificCosts.materialCost,
+            estimatedCost: finalEstimatedCost,
+            materialCost: finalMaterialCost,
             laborCost: sizeSpecificCosts.laborCost,
             overheadCost: sizeSpecificCosts.overheadCost,
             quantity,
@@ -60,9 +94,9 @@ export class OrderItemDesignService {
             complexity: sizeSpecificCosts.complexity
           });
           
-          totalEstimatedCost += sizeSpecificCosts.totalCost;
+          totalEstimatedCost += finalEstimatedCost;
           
-          console.log(`Item ${item.name} (Size ${size}): Estimated cost EGP ${sizeSpecificCosts.totalCost} (Material: ${sizeSpecificCosts.materialCost}, Labor: ${sizeSpecificCosts.laborCost}, Overhead: ${sizeSpecificCosts.overheadCost})`);
+          console.log(`Item ${item.name} (Size ${size}): Estimated cost EGP ${finalEstimatedCost} (Material: ${finalMaterialCost}, Labor: ${sizeSpecificCosts.laborCost}, Overhead: ${sizeSpecificCosts.overheadCost})`);
         } else {
           console.warn(`No design found for item: ${item.name} (${item.productId})`);
           

@@ -59,6 +59,7 @@ export default function DesignsManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -160,20 +161,37 @@ export default function DesignsManagement() {
   };
 
   const handleImportDesigns = async () => {
+    if (isImporting) return; // Prevent multiple clicks
+    
     try {
+      setIsImporting(true);
       const response = await fetch("/api/designs/import", { method: "POST" });
       const result = await response.json();
 
       if (result.success) {
-        toast.success(result.message);
+        const data = result.data || {};
+        let message = result.message;
+        if (!message) {
+          if (data.updated && data.updated > 0) {
+            message = `Imported ${data.imported || 0} new designs, updated ${data.updated} existing designs`;
+          } else {
+            message = `Successfully imported ${data.imported || 0} designs`;
+          }
+          if (data.errors && data.errors.length > 0) {
+            message += ` (${data.errors.length} errors)`;
+          }
+        }
+        toast.success(message);
         loadDesigns();
         loadStats();
       } else {
-        toast.error("Failed to import designs");
+        toast.error(result.error || "Failed to import designs");
       }
     } catch (error) {
       console.error("Error importing designs:", error);
       toast.error("Failed to import designs");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -223,9 +241,22 @@ export default function DesignsManagement() {
           <p className="text-muted-foreground">Manage product designs and cost configurations</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleImportDesigns} variant="outline">
-            <Upload className="h-4 w-4 mr-2" />
-            Import from Products
+          <Button 
+            onClick={handleImportDesigns} 
+            variant="outline"
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Importing...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Import from Products
+              </>
+            )}
           </Button>
           <Button onClick={handleCreateDesign}>
             <Plus className="h-4 w-4 mr-2" />

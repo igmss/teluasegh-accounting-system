@@ -11,7 +11,9 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       data: result,
-      message: `Successfully imported ${result.imported} designs`
+      message: result.updated > 0 
+        ? `Successfully imported ${result.imported} new designs, updated ${result.updated} existing designs`
+        : `Successfully imported ${result.imported} new designs`
     });
 
   } catch (error) {

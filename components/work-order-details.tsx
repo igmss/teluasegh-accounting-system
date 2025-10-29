@@ -170,7 +170,12 @@ export function WorkOrderDetails({ workOrder }: WorkOrderDetailsProps) {
                 <div key={index} className="p-3 border rounded-lg">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <div className="font-medium">{itemCost.designName || "Unknown Design"}</div>
+                      <div className="font-medium">
+                        {itemCost?.item?.name || itemCost?.item?.productName || itemCost.designName || "Unknown Design"}
+                      </div>
+                      {itemCost.designName && (itemCost?.item?.name !== itemCost.designName) && (
+                        <div className="text-xs text-muted-foreground">Design: {itemCost.designName}</div>
+                      )}
                       <div className="text-sm text-muted-foreground">
                         Size: {itemCost.size} | Quantity: {itemCost.quantity} | Complexity: {itemCost.complexity}
                       </div>
